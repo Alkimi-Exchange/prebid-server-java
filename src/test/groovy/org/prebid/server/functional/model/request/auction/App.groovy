@@ -22,6 +22,9 @@ class App {
     String keywords
 
     static App getDefaultApp() {
-        new App(id: PBSUtils.randomString)
+        new App(id: PBSUtils.randomString).tap {
+            bundle:  PBSUtils.getRandomString()
+            ver: "1.0.0"
+        }
     }
 }
