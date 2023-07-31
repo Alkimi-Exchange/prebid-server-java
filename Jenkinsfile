@@ -39,7 +39,7 @@ pipeline {
         }
         stage('Deploy to dev') {
             when {
-                branch "master"
+                branch "master_asterio"
             }
             steps {
                 dir('ansible') {
