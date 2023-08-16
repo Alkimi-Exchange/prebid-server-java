@@ -7,8 +7,8 @@
   },
   "bidfloor": 0.01,
   "ext": {
-    "admaru": {
-      "placementId": "some_placement_id"
+    "alkimi": {
+      "token": "a6b042a5-2d68-4110-a051-77fbaf002035"
     }
   },
   "tagid": "774"
