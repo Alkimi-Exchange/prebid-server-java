@@ -8,11 +8,11 @@
       }
     ]
   },
-  "bidfloor": 0.01,
+  "bidfloor": 0.4,
   "ext": {
     "admaru": {
-      "placementId": "some_placement_id"
+      "token": "a6b042a5-2d68-4110-a051-77fbaf002035"
     }
   },
-  "tagid": "773"
+  "tagid": "vid1"
 }
