@@ -6,6 +6,7 @@
     "mimes": ["video/mp4"]
   },
   "bidfloor": 0.01,
+  "bidfloorcur": "USD",
   "ext": {
     "alkimi": {
       "token": "a6b042a5-2d68-4110-a051-77fbaf002035"

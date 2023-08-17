@@ -1,6 +1,7 @@
 {
   "tagid": "957",
   "bidfloor": 0.01,
+  "bidfloorcur": "USD",
   "ext": {
     "alkimi": {
     }
