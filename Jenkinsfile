@@ -4,15 +4,13 @@ pipeline {
     environment {
         JAVA_HOME = "/opt/java/jdk-17.0.2/"
         CI = "false"
-        MY_ENV = sh(returnStdout: true, script:
-                '''#!/bin/bash
-                   if [[ $BRANCH_NAME =~ "release-" ]]; then echo prod; else echo dev; fi
-                '''
+        MY_VERSION = sh(
+                script: 'if [[ $BRANCH_NAME =~ (sprint-|REL_V) ]]; then echo "${BRANCH_NAME}"; else echo "${BRANCH_NAME}-0.0.${BUILD_ID}-SNAPSHOT"; fi',
+                returnStdout: true
         ).trim()
-        MY_VERSION = sh(returnStdout: true, script:
-                '''#!/bin/bash
-                   if [[ $BRANCH_NAME =~ "release-" ]]; then echo "${BUILD_ID}.0.0"; else echo "${BUILD_ID}.0.0-SNAPSHOT"; fi
-                '''
+        MY_ENV = sh(
+                script: 'if [[ $BRANCH_NAME =~ "REL_V" ]]; then echo "prod"; elif [[ $BRANCH_NAME =~ "sprint-" ]]; then echo qa; else echo "dev"; fi',
+                returnStdout: true
         ).trim()
         DO_API_TOKEN = vault path: 'jenkins/digitalocean', key: 'ro_token'
     }
@@ -46,6 +44,18 @@ pipeline {
                     git branch: 'master', url: "git@github.com:Alkimi-Exchange/alkimi-ansible.git", credentialsId: 'ssh-alkimi-ansible'
                 }
                 sh "cd ./ansible && ansible-playbook ./apps/dev/prebid-server.yml --extra-vars='artifactPath=${env.WORKSPACE}/target/prebid-server.jar configPath=${env.WORKSPACE}/config'"
+            }
+        }
+        stage('Build and push docker images') {
+            when { tag "REL_V*" }
+            steps {
+                script {
+                     docker.withRegistry('https://685748726849.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:jenkins_ecr') {
+                         def dockerImage = docker.build("alkimi/prebid-server:${MY_VERSION}", "--build-arg BUILD_ID=${MY_VERSION} --build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
+                         dockerImage.push()
+                         dockerImage.push('latest')
+                     }
+                }
             }
         }
     }

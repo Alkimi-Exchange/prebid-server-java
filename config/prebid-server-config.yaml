@@ -31,3 +31,8 @@ admin-endpoints:
     path: /logging/changelevel
     on-application-port: true
     protected: false
+  collected-metrics:
+    enabled: true
+    path: /metrics
+    on-application-port: false
+    protected: false
