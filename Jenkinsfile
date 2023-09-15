@@ -5,7 +5,7 @@ pipeline {
         JAVA_HOME = "/opt/java/jdk-17.0.2/"
         CI = "false"
         MY_VERSION = sh(
-                script: 'if [[ $BRANCH_NAME =~ (sprint-|REL_V) ]]; then echo "${BRANCH_NAME}"; else echo "${BRANCH_NAME}-0.0.${BUILD_ID}-SNAPSHOT"; fi',
+                script: 'if [[ $BRANCH_NAME =~ (sprint-|REL_V) ]]; then echo "${BRANCH_NAME}"; else echo "0.0.${BUILD_ID}-${BRANCH_NAME}-SNAPSHOT"; fi',
                 returnStdout: true
         ).trim()
         MY_ENV = sh(
