@@ -3,10 +3,11 @@ adapters:
   alkimi:
     enabled: true
 metrics:
-  prefix: prebid
   prometheus:
     enabled: true
     port: 8070
+    custom-labels-enabled: true
+    subsystem: pbs
 cache:
   scheme: http
   host: localhost
@@ -33,9 +34,4 @@ admin-endpoints:
     enabled: true
     path: /logging/changelevel
     on-application-port: true
-    protected: false
-  collected-metrics:
-    enabled: true
-    path: /metrics
-    on-application-port: false
     protected: false
