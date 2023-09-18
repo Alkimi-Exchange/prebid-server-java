@@ -5,7 +5,7 @@ pipeline {
         JAVA_HOME = "/opt/java/jdk-17.0.2/"
         CI = "false"
         MY_VERSION = sh(
-                script: 'if [[ $BRANCH_NAME =~ (sprint-|REL_V) ]]; then echo "${BRANCH_NAME}"; else echo "0.0.${BUILD_ID}-${BRANCH_NAME}-SNAPSHOT"; fi',
+                script: 'if [[ $BRANCH_NAME =~ "\\d+\\.\\d+\\.\\d" ]]; then echo "${BRANCH_NAME}"; else echo "0.0.${BUILD_ID}-${BRANCH_NAME}-SNAPSHOT"; fi',
                 returnStdout: true
         ).trim()
         MY_ENV = sh(
@@ -19,13 +19,13 @@ pipeline {
     }
     agent any
     stages {
-        stage('Prepare build') {
-            steps {
-                script {
-                    sh 'cp ./src/main/resources/bidder-config/alkimi.yaml.${MY_ENV} ./src/main/resources/bidder-config/alkimi.yaml'
-                }
-            }
-        }
+        //stage('Prepare build') {
+        //    steps {
+        //        script {
+        //           sh 'cp ./src/main/resources/bidder-config/alkimi.yaml.${MY_ENV} ./src/main/resources/bidder-config/alkimi.yaml'
+        //        }
+        //    }
+        //}
 	    stage('Build') {
             steps {
                 script {
@@ -47,14 +47,16 @@ pipeline {
             }
         }
         stage('Build and push docker images') {
-            when { tag "REL_V*" }
+            //when { tag "REL_V*" }
             steps {
                 script {
-                     docker.withRegistry('https://685748726849.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:jenkins_ecr') {
-                         def dockerImage = docker.build("alkimi/prebid-server:${MY_VERSION}", "--build-arg BUILD_ID=${MY_VERSION} --build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
-                         dockerImage.push()
-                         dockerImage.push('latest')
-                     }
+                    if (env.BRANCH_NAME =~ "\\d+\\.\\d+\\.\\d") {
+                        docker.withRegistry('https://685748726849.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:jenkins_ecr') {
+                            def dockerImage = docker.build("alkimi/prebid-server:${MY_VERSION}", "--build-arg BUILD_ID=${MY_VERSION} --build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
+                            dockerImage.push()
+                            dockerImage.push('latest')
+                        }
+                    }
                 }
             }
         }
