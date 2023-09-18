@@ -52,7 +52,7 @@ pipeline {
                 script {
                     if (env.BRANCH_NAME =~ "\\d+\\.\\d+\\.\\d") {
                         docker.withRegistry('https://685748726849.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:jenkins_ecr') {
-                            def dockerImage = docker.build("alkimi/prebid-server:${MY_VERSION}", "--build-arg BUILD_ID=${MY_VERSION} --build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
+                            def dockerImage = docker.build("alkimi/prebid-server:${MY_VERSION}", "--build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
                             dockerImage.push()
                             dockerImage.push('latest')
                         }

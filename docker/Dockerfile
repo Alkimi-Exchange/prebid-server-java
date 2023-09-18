@@ -1,5 +1,4 @@
 FROM eclipse-temurin:17
-ARG BUILD_ID
 ARG APP_NAME
 
 ENV APP_NAME $APP_NAME
@@ -12,7 +11,7 @@ RUN adduser "$USER_NAME"
 RUN mkdir -p --mode=755 "$APP_WORKDIR/$APP_NAME"
 RUN chown -R "$USER_NAME":"$USER_NAME" "$APP_WORKDIR"
 
-COPY ./target/${APP_NAME}-${BUILD_ID}.jar ${APP_WORKDIR}/${APP_NAME}/${APP_NAME}.jar
+COPY ./target/${APP_NAME}.jar ${APP_WORKDIR}/${APP_NAME}/${APP_NAME}.jar
 COPY ./config/prebid-server-config.yaml ${APP_WORKDIR}/${APP_NAME}/prebid-server-config.yaml
 COPY ./config/prebid-server-settings.yaml ${APP_WORKDIR}/${APP_NAME}/prebid-server-settings.yaml
 
