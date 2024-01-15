@@ -5,7 +5,7 @@ ENV APP_NAME $APP_NAME
 ENV APP_WORKDIR="/opt/alkimi"
 ENV USER_NAME="appuser"
 ENV HEAP_OPTS="-Xms512M -Xmx512M"
-ENV EXCHANGE_URL="http://exchange:8080/server/bid"
+#ENV EXCHANGE_URL="http://exchange:8080/server/bid"
 
 RUN adduser "$USER_NAME"
 RUN mkdir -p --mode=755 "$APP_WORKDIR/$APP_NAME/stored"
@@ -23,5 +23,7 @@ EXPOSE 8060
 EXPOSE 8070
 EXPOSE 8080
 
-CMD java -jar ${HEAP_OPTS} -Dadapters.alkimi.endpoint=${EXCHANGE_URL} \
- -Dspring.config.additional-location=./prebid-server-config.yaml ${APP_NAME}.jar
+CMD java -jar ${HEAP_OPTS} -Dspring.config.additional-location=./prebid-server-config.yaml ${APP_NAME}.jar
+
+#CMD java -jar ${HEAP_OPTS} -Dadapters.alkimi.endpoint=${EXCHANGE_URL} \
+# -Dspring.config.additional-location=./prebid-server-config.yaml ${APP_NAME}.jar
