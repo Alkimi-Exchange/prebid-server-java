@@ -1,6 +1,6 @@
 adapters:
   alkimi:
-    endpoint: https://exchange.alkimi-onboarding.com/server/bid
+    endpoint: http://exchange:8080/server/bid
     meta-info:
       maintainer-email: support@alkimi.org
       app-media-types:
