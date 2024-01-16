@@ -5,9 +5,9 @@ accounts:
       price-granularity: low
     privacy:
       ccpa:
-        enabled: true
+        enabled: false
       gdpr:
-        enabled: true
+        enabled: false
     cookie-sync:
       default-limit: 8
       max-limit: 15
