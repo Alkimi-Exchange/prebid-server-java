@@ -2,7 +2,7 @@
 
 pipeline {
     environment {
-        JAVA_HOME = "/opt/java/jdk-17.0.2/"
+        JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64"
         CI = "false"
         MY_VERSION = sh(
                 script: 'if [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi" ]]; then echo "${BRANCH_NAME}"; else echo "0.0.${BUILD_ID}-${BRANCH_NAME}-SNAPSHOT"; fi',
