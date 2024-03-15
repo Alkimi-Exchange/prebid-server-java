@@ -5,11 +5,11 @@ pipeline {
         JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64"
         CI = "false"
         MY_VERSION = sh(
-                script: 'if [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi" ]]; then echo "${BRANCH_NAME}"; else echo "0.0.${BUILD_ID}-${BRANCH_NAME}-SNAPSHOT"; fi',
+                script: 'if [[ $BRANCH_NAME =~ "^\d+.\d+.\d+-alkimi$" ]]; then echo "${BRANCH_NAME}"; else echo "0.0.${BUILD_ID}-${BRANCH_NAME}-SNAPSHOT"; fi',
                 returnStdout: true
         ).trim()
         MY_ENV = sh(
-                script: 'if [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi$" ]]; then echo "prod"; elif [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi-qa$" ]]; then echo qa; else echo "dev"; fi',
+                script: 'if [[ $BRANCH_NAME =~ "^\d+.\d+.\d+-alkimi$" ]]; then echo "prod"; elif [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi-qa$" ]]; then echo qa; else echo "dev"; fi',
                 returnStdout: true
         ).trim()
     }
