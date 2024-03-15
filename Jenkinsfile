@@ -12,7 +12,6 @@ pipeline {
                 script: 'if [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi$" ]]; then echo "prod"; elif [[ $BRANCH_NAME =~ "^\\d+\\.\\d+\\.\\d+-alkimi-qa$" ]]; then echo qa; else echo "dev"; fi',
                 returnStdout: true
         ).trim()
-        DO_API_TOKEN = vault path: 'jenkins/digitalocean', key: 'ro_token'
     }
     options {
         disableConcurrentBuilds()
@@ -53,8 +52,9 @@ pipeline {
             steps {
                 script {
                     if (env.BRANCH_NAME =~ "\\d+\\.\\d+\\.\\d+-alkimi") {
-                        docker.withRegistry('https://685748726849.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:jenkins_ecr') {
-                            def dockerImage = docker.build("alkimi/prebid-server:${MY_VERSION}", "--build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
+                        sh "gcloud -q auth configure-docker europe-west2-docker.pkg.dev"
+                        docker.withRegistry('https://europe-west2-docker.pkg.dev') {
+                            def dockerImage = docker.build("europe-west2-docker.pkg.dev/alkimi-exchange-dev/alkimi-exchange/prebid-server:${MY_VERSION}", "--build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
                             dockerImage.push()
                             dockerImage.push('latest')
                         }
