@@ -35,4 +35,4 @@ admin-endpoints:
     path: /logging/changelevel
     on-application-port: true
     protected: false
-external-url: https://prebid-srv.alkimi-onboarding.com
+external-url: https://pbs.alkimi-onboarding.com
