@@ -9,7 +9,7 @@ pipeline {
                 returnStdout: true
         ).trim()
         MY_ENV = sh(
-                script: 'if [[ $BRANCH_NAME =~ ^[0-9]+.[0-9]+.[0-9]+-alkimi$ ]]; then echo "prod"; elif [[ $BRANCH_NAME =~ ^[0-9]+.[0-9]+.[0-9]+-alkimi$ ]]; then echo qa; else echo "dev"; fi',
+                script: 'if [[ $BRANCH_NAME =~ ^[0-9]+.[0-9]+.[0-9]+-alkimi$ ]]; then echo "prod"; elif [[ $BRANCH_NAME =~ ^[0-9]+.[0-9]+.[0-9]+-alkimi-qa$ ]]; then echo qa; else echo "dev"; fi',
                 returnStdout: true
         ).trim()
     }
@@ -22,6 +22,7 @@ pipeline {
            steps {
                script {
                   sh 'cp ./src/main/resources/bidder-config/alkimi.yaml.${MY_ENV} ./src/main/resources/bidder-config/alkimi.yaml'
+                  sh 'cp ./config/prebid-server-config.yaml.${MY_ENV} ./config/prebid-server-config.yaml'
                }
            }
         }

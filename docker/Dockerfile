@@ -11,7 +11,8 @@ RUN mkdir -p --mode=755 "$APP_WORKDIR/$APP_NAME/stored"
 RUN chown -R "$USER_NAME":"$USER_NAME" "$APP_WORKDIR"
 
 COPY ./target/${APP_NAME}.jar ${APP_WORKDIR}/${APP_NAME}/${APP_NAME}.jar
-COPY ./config/prebid-server-*.yaml ${APP_WORKDIR}/${APP_NAME}/
+COPY ./config/prebid-server-config.yaml ${APP_WORKDIR}/${APP_NAME}/
+COPY ./config/prebid-server-settings.yaml ${APP_WORKDIR}/${APP_NAME}/
 COPY ./config/*.json ${APP_WORKDIR}/${APP_NAME}/stored/
 
 USER "$USER_NAME"
