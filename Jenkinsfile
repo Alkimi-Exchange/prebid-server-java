@@ -40,7 +40,7 @@ pipeline {
             }
             steps {
                 dir('ansible') {
-                    git branch: 'migration_to_gcp', url: "git@github.com:Alkimi-Exchange/alkimi-ansible.git", credentialsId: 'ssh-alkimi-ansible'
+                    git branch: 'master', url: "git@github.com:Alkimi-Exchange/alkimi-ansible.git", credentialsId: 'ssh-alkimi-ansible'
                     withCredentials([file(credentialsId: 'exchange_service_account_file', variable: 'sa_file')]) {
                         sh "cp -f ${sa_file} ./service_account_gcp.json"
                     }
