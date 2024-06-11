@@ -1,0 +1,19 @@
+{
+  "id": "impId001",
+  "banner": {
+    "format": [
+      {
+        "w": 300,
+        "h": 250
+      }
+    ]
+  },
+  "bidfloor": 0.4,
+  "bidfloorcur": "USD",
+  "ext": {
+    "alkimi": {
+      "token": "10d67d82-09ff-47f2-b0d6-8e10dc10fa7e"
+    }
+  },
+  "tagid": "773"
+}
