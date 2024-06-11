@@ -1,0 +1,16 @@
+{
+  "id": "impId002",
+  "video": {
+    "w": 300,
+    "h": 250,
+    "mimes": ["video/mp4"]
+  },
+  "bidfloor": 0.01,
+  "bidfloorcur": "USD",
+  "ext": {
+    "alkimi": {
+      "token": "10d67d82-09ff-47f2-b0d6-8e10dc10fa7e"
+    }
+  },
+  "tagid": "774"
+}
