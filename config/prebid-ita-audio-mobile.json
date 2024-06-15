@@ -1,11 +1,9 @@
 {
   "id": "impId002",
-  "video": {
-    "w": 300,
-    "h": 250,
+  "audio": {
     "mimes": ["audio/mp3"]
   },
-  "bidfloor": 0.40,
+  "bidfloor": 0.01,
   "bidfloorcur": "USD",
   "ext": {
     "alkimi": {
