@@ -53,9 +53,8 @@ pipeline {
             steps {
                 script {
                     if (env.BRANCH_NAME =~ "\\d+\\.\\d+\\.\\d+-alkimi") {
-                        sh "gcloud -q auth configure-docker europe-west2-docker.pkg.dev"
-                        docker.withRegistry('https://europe-west2-docker.pkg.dev') {
-                            def dockerImage = docker.build("europe-west2-docker.pkg.dev/alkimi-exchange-dev/alkimi-exchange/prebid-server:${MY_VERSION}", "--build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
+                        docker.withRegistry('https://685748726849.dkr.ecr.eu-west-2.amazonaws.com','ecr:eu-west-2:jenkins_ecr') {
+                            def dockerImage = docker.build("alkimi-exchange/prebid-server:${MY_VERSION}", "--build-arg APP_NAME=prebid-server -f docker/Dockerfile ${WORKSPACE}")
                             dockerImage.push()
                             dockerImage.push('latest')
                         }
