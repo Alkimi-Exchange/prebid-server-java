@@ -17,7 +17,7 @@
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-redis-client</artifactId>
-            <version>3.9.10</version>
+            <version>3.9.16</version>
         </dependency>
     </dependencies>
 </project>
