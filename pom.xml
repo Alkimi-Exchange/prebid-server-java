@@ -30,7 +30,7 @@
         <javax.annotation-api.version>1.3.1</javax.annotation-api.version>
         <validation-api.version>2.0.1.Final</validation-api.version>
         <hibernate-validator.version>6.1.5.Final</hibernate-validator.version>
-        <vertx.version>3.9.10</vertx.version>
+        <vertx.version>4.4.2</vertx.version>
         <netty.version>4.1.69.Final</netty.version>
         <lombok.version>1.18.24</lombok.version>
         <commons.version>3.12.0</commons.version>
@@ -40,7 +40,7 @@
         <httpclient.version>4.5.13</httpclient.version>
         <ipaddress.version>5.3.1</ipaddress.version>
         <oshi.version>6.4.5</oshi.version>
-        <jackson.version>2.14.1</jackson.version>
+        <jackson.version>2.15.0</jackson.version>
         <json-schema-validator.version>1.0.76</json-schema-validator.version>
         <jsonpatch.version>1.13</jsonpatch.version>
         <mysql.version>8.0.28</mysql.version>
@@ -52,7 +52,7 @@
         <consent-string-sdk.version>2.0.2</consent-string-sdk.version>
         <iabtcf.version>2.0.7</iabtcf.version>
         <metrics-prometheus.version>0.12.0</metrics-prometheus.version>
-        <maxmind-client.version>2.12.0</maxmind-client.version>
+        <maxmind-client.version>2.17.0</maxmind-client.version>
         <logback.version>1.2.13</logback.version>
         <log4j.version>2.19.0</log4j.version>
         <hikari.version>5.0.1</hikari.version>
