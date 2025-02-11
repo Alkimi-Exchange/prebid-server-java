@@ -67,7 +67,7 @@ public class AlkimiBidder implements Bidder<BidRequest> {
     private Imp updateImp(Imp imp, ExtImpAlkimi extImpAlkimi) {
         final Price bidFloorPrice = Price.of(imp.getBidfloorcur(), imp.getBidfloor());
 
-        ObjectNode newExt = imp.getExt().deepCopy();
+        final ObjectNode newExt = imp.getExt().deepCopy();
         newExt.replace("bidder", makeImpExt(imp, extImpAlkimi));
 
         return imp.toBuilder()
