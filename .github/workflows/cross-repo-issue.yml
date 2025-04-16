@@ -8,7 +8,7 @@ on:
 
 jobs:
   cross-repo:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Generate token
         id: generate_token

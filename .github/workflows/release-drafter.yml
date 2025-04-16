@@ -8,7 +8,7 @@ on:
 jobs:
   update_release_draft:
     name: Publish release with notes
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Create and publish release
         uses: release-drafter/release-drafter@v5
