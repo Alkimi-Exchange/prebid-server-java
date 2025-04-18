@@ -1,0 +1,22 @@
+# CODEOWNERS file to define ownership of files and directories in the repository.
+# Lines starting with '#' are comments. Owners can be GitHub usernames (@username) or teams (@org/team).
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners for details.
+
+# Default owners for everything in the repo (applied if no specific rule matches)
+* @Alkimi-Exchange/devops-team
+
+# Specific rules (override default)
+.github/workflows/ @Alkimi-Exchange/devops-team
+
+# Example rules (commented out for future use):
+# All documentation files owned by the docs team
+# docs/ @Alkimi-Exchange/docs-team
+
+# JavaScript files owned by the frontend team
+# *.js @Alkimi-Exchange/frontend_team
+
+# Python files owned by a specific developer and the backend team
+# *.py @username @Alkimi-Exchange/python-team
+
+# To add a new rule, uncomment an example or add a new line with the pattern and owners.
+# Example: src/ @Alkimi-Exchange/python-team
