@@ -1,0 +1,432 @@
+# GitHub Actions CI pipeline for language-agnostic Docker-based projects
+# This workflow validates PRs, runs linting, testing, building, smoke testing, security scanning,
+# release management, and notifications for projects using Docker, supporting Scala, Go, Java, Python, Node.js, TypeScript, and others.
+# The pipeline is language-agnostic, using Docker stages for all language-specific tasks and including a minimal Node.js setup
+# to resolve 'node: command not found' issues on self-hosted runners for GitHub Actions dependencies.
+# Customize this workflow to match your project's requirements, such as additional checks or environment setups.
+# References:
+# - GitHub Actions: https://docs.github.com/en/actions
+# - Docker Buildx: https://docs.docker.com/build/buildx/
+# - SonarQube: https://docs.sonarqube.org/latest/
+# - Snyk: https://docs.snyk.io/
+# - Release Please: https://github.com/googleapis/release-please-action
+
+name: ci
+
+env:
+  CONTINUE_ON_ERROR: true  # Set to true for now; toggle to false when repo stabilizes to enforce stricter checks
+  DOCKER_DEFAULT_PLATFORM: linux/amd64
+
+on:
+  pull_request:  # Run on all PRs
+  push:
+    branches: [master]  # Retain for direct commits to main
+
+permissions:
+  contents: read
+  pull-requests: write
+  packages: write
+  security-events: write
+  actions: read
+
+jobs:
+  validate-pr:
+    runs-on: self-hosted
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check PR Source and Target Branches
+        run: |
+          PROTECTED_BRANCHES=("main" "dev" "qa")
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+          for PROTECTED_BRANCH in "${PROTECTED_BRANCHES[@]}"; do
+            if [ "$SOURCE_BRANCH" = "$PROTECTED_BRANCH" ]; then
+              echo "Error: PR from protected branch '$SOURCE_BRANCH' to non-protected branch '$TARGET_BRANCH' is not allowed."
+              echo "Please create a feature branch from '$SOURCE_BRANCH', resolve conflicts there, and submit a PR to '$SOURCE_BRANCH'."
+              exit 1
+            fi
+          done
+          echo "PR is valid: from '$SOURCE_BRANCH' to '$TARGET_BRANCH'."
+        shell: bash
+
+  setup:
+    needs: validate-pr
+    runs-on: self-hosted
+    outputs:
+      dockerfile_exists: ${{ steps.check-dockerfile.outputs.dockerfile_exists }}
+      docker_compose_exists: ${{ steps.check-docker-compose.outputs.docker_compose_exists }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      language: ${{ steps.detect-language.outputs.language }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check Dockerfile Existence
+        id: check-dockerfile
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "dockerfile_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "dockerfile_exists=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Check docker-compose.yml Existence
+        id: check-docker-compose
+        run: |
+          if [ -f docker-compose.yml ]; then
+            echo "docker_compose_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "docker_compose_exists=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Detect Project Language
+        id: detect-language
+        run: |
+          if [ -f build.sbt ]; then
+            echo "language=scala" >> $GITHUB_OUTPUT
+          elif [ -f pom.xml ] || [ -f build.gradle ]; then
+            echo "language=java" >> $GITHUB_OUTPUT
+          elif [ -f requirements.txt ] || [ -f setup.py ]; then
+            echo "language=python" >> $GITHUB_OUTPUT
+          elif [ -f package.json ]; then
+            echo "language=nodejs" >> $GITHUB_OUTPUT
+          elif [ -f go.mod ]; then
+            echo "language=go" >> $GITHUB_OUTPUT
+          else
+            echo "language=unknown" >> $GITHUB_OUTPUT
+          fi
+      - name: Extract metadata (tags, labels) for Docker
+        if: steps.check-dockerfile.outputs.dockerfile_exists == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,format=short,prefix=
+
+  lint:
+    needs: [validate-pr, setup]
+    runs-on: self-hosted
+    if: needs.setup.outputs.dockerfile_exists == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Lint Stage
+        uses: docker/build-push-action@v6
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+        with:
+          context: .
+          push: false
+          target: lint
+          tags: ${{ needs.setup.outputs.tags }}-lint
+          platforms: ${{ env.DOCKER_DEFAULT_PLATFORM }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test:
+    needs: [validate-pr, setup]
+    runs-on: self-hosted
+    if: needs.setup.outputs.dockerfile_exists == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Test Stage
+        uses: docker/build-push-action@v6
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+        with:
+          context: .
+          push: false
+          target: test
+          tags: ${{ needs.setup.outputs.tags }}-test
+          platforms: ${{ env.DOCKER_DEFAULT_PLATFORM }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+      - name: Export Test Artifacts
+        run: |
+          docker create --name test-container ${{ needs.setup.outputs.tags }}-test
+          docker cp test-container:/test-reports/. ./test-reports || echo "No test reports found"
+          docker rm test-container
+        continue-on-error: true
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: ./test-reports/
+          retention-days: 90
+        if: always()
+
+  build:
+    needs: [validate-pr, setup]
+    runs-on: self-hosted
+    if: needs.setup.outputs.dockerfile_exists == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Final Stage
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          target: final
+          tags: ${{ needs.setup.outputs.tags }}
+          labels: ${{ needs.setup.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  smoke-test:
+    needs: [validate-pr, setup, lint, test, build]
+    runs-on: self-hosted
+    if: needs.setup.outputs.docker_compose_exists == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+      - name: Run Smoke Test
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+        run: |
+          export IMAGE_TAG=${{ needs.setup.outputs.tags }}
+          docker-compose -f docker-compose.yml up -d
+          docker-compose -f docker-compose.yml run --rm smoke-test
+          docker-compose -f docker-compose.yml down --volumes
+      - name: Upload Smoke Test Logs
+        if: always()
+        run: |
+          docker-compose -f docker-compose.yml logs > smoke-test-logs.txt
+          echo "Smoke test logs saved to smoke-test-logs.txt"
+        continue-on-error: true
+      - name: Archive Smoke Test Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs
+          path: smoke-test-logs.txt
+          retention-days: 90
+        if: always()
+
+  sonar-scan:
+    needs: [validate-pr, setup, lint, test, build, smoke-test]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0  # Required for SonarQube to analyze git history
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+
+  snyk-scan:
+    needs: [validate-pr, setup, lint, test, build, smoke-test]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Snyk CLI
+        uses: snyk/actions/setup@master
+      - name: Snyk Test (Dockerfile or Docker Compose)
+        run: |
+          snyk test --severity-threshold=high --sarif-file-output=snyk.sarif \
+            ${{ needs.setup.outputs.dockerfile_exists == 'true' && '--file=Dockerfile' || '' }} \
+            ${{ needs.setup.outputs.docker_compose_exists == 'true' && '--docker docker-compose.yml' || '' }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+      - name: Snyk Test (Language-Specific Dependencies)
+        if: needs.setup.outputs.language != 'unknown'
+        run: |
+          case "${{ needs.setup.outputs.language }}" in
+            scala)
+              FILE="build.sbt"
+              ;;
+            java)
+              FILE="pom.xml"
+              ;;
+            python)
+              FILE="requirements.txt"
+              ;;
+            nodejs)
+              FILE="package.json"
+              ;;
+            go)
+              FILE="go.mod"
+              ;;
+            *)
+              FILE=""
+              ;;
+          esac
+          if [ -n "$FILE" ] && [ -f "$FILE" ]; then
+            snyk test --severity-threshold=high --sarif-file-output=snyk-lang.sarif --file="$FILE"
+          else
+            echo "No language-specific dependency file found for ${{ needs.setup.outputs.language }}"
+          fi
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+      - name: Snyk Container Scan (if Docker image exists)
+        if: needs.setup.outputs.dockerfile_exists == 'true'
+        run: |
+          snyk container test ${{ needs.setup.outputs.tags }} --severity-threshold=high --sarif-file-output=snyk-docker.sarif \
+            --policy-path=.snyk --exclude-base-image-vulns=false
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+      - name: Snyk Monitor (Optional)
+        if: success()
+        run: |
+          snyk monitor --severity-threshold=high \
+            ${{ needs.setup.outputs.dockerfile_exists == 'true' && '--file=Dockerfile' || '' }} \
+            ${{ needs.setup.outputs.docker_compose_exists == 'true' && '--docker docker-compose.yml' || '' }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
+      - name: Upload Snyk SARIF to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: |
+            snyk.sarif
+            snyk-lang.sarif
+            snyk-docker.sarif
+
+  release:
+    needs: [validate-pr, setup, lint, test, build, smoke-test, sonar-scan, snyk-scan]
+    runs-on: self-hosted
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PEM_FILE }}
+          owner: ${{ github.repository_owner }}
+      - name: Run Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
+      - name: Tag Image with Release Version
+        if: steps.release.outputs.release_created == 'true'
+        run: |
+          docker pull ${{ needs.setup.outputs.tags }}
+          docker tag ${{ needs.setup.outputs.tags }} ghcr.io/${{ github.repository }}:${{ steps.release.outputs.version }}
+          docker push ghcr.io/${{ github.repository }}:${{ steps.release.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  notify:
+    needs: [validate-pr, setup, lint, test, build, smoke-test, sonar-scan, snyk-scan, release]
+    runs-on: self-hosted
+    if: failure()
+    steps:
+      - name: Send Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_USERNAME: CI Bot
+          SLACK_ICON: ":robot_face:"
+          SLACK_TITLE: CI Pipeline Failure
+          SLACK_COLOR: "#FF0000"
+          SLACK_MESSAGE: "Workflow *${{ github.workflow }}* failed for PR #${{ github.event.pull_request.number || github.sha }} (`${{ github.sha }}`) on branch `${{ github.ref_name }}`. PR: ${{ github.event.pull_request.html_url || github.server_url }}/${{ github.repository }}/commit/${{ github.sha }} | Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
