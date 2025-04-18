@@ -1,0 +1,67 @@
+name: Check Stale Branches
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Runs every Monday at midnight UTC
+  workflow_dispatch:     # Allows manual trigger from GitHub UI
+jobs:
+  check-stale-branches:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+      - name: Check for Stale Branches
+        id: stale-check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Get current date in seconds since epoch
+          current_date=$(date +%s)
+          stale_threshold=$((current_date - 30 * 24 * 60 * 60))  # 30 days ago
+          stale_branches=""
+          has_stale=false
+
+          # List all branches excluding the main branch
+          branches=$(gh api -H "Accept: application/vnd.github+json" /repos/${{ github.repository }}/branches --jq '.[] | select(.name != "master") | .name')
+          
+          for branch in $branches; do
+            # Get the last commit date for the branch
+            last_commit_date=$(gh api -H "Accept: application/vnd.github+json" /repos/${{ github.repository }}/branches/$branch --jq '.commit.commit.author.date')
+            last_commit_ts=$(date -d "$last_commit_date" +%s)
+
+            if [ $last_commit_ts -lt $stale_threshold ]; then
+              has_stale=true
+              days_stale=$(( (current_date - last_commit_ts) / (24 * 60 * 60) ))
+              # Recommendation logic
+              recommendation="Review and consider merging or deleting"
+              if [ $days_stale -gt 90 ]; then
+                recommendation="Delete (inactive for over 90 days)"
+              fi
+              stale_branches="$stale_branches\n- **$branch**: Inactive for $days_stale days. Recommendation: $recommendation"
+            fi
+          done
+
+          if [ "$has_stale" = "true" ]; then
+            echo "Stale branches found:"
+            echo -e "$stale_branches"
+            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo -e "Stale branches detected in *${{ github.repository }}*:\n$stale_branches" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_stale=true" >> $GITHUB_OUTPUT
+          else
+            echo "No stale branches found."
+            echo "message=No stale branches detected in *${{ github.repository }}*." >> $GITHUB_OUTPUT
+            echo "has_stale=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        if: always()  # Run even if no stale branches, to confirm
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_USERNAME: "Stale Branch Bot"
+          SLACK_ICON: ":ghost:"
+          SLACK_TITLE: "Stale Branch Report"
+          SLACK_COLOR: "${{ steps.stale-check.outputs.has_stale == 'true' && '#FFA500' || '#00FF00' }}"  # Orange if stale, green if none
+          SLACK_MESSAGE: "${{ steps.stale-check.outputs.message }}\nRun details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
