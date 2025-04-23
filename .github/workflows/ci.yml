@@ -15,7 +15,6 @@ name: ci
 
 env:
   CONTINUE_ON_ERROR: true  # Set to true for now; toggle to false when repo stabilizes to enforce stricter checks
-  DOCKER_DEFAULT_PLATFORM: linux/amd64
 
 on:
   pull_request:  # Run on all PRs
@@ -57,7 +56,6 @@ jobs:
       docker_compose_exists: ${{ steps.check-docker-compose.outputs.docker_compose_exists }}
       tags: ${{ steps.meta.outputs.tags }}
       labels: ${{ steps.meta.outputs.labels }}
-      language: ${{ steps.detect-language.outputs.language }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,22 +79,6 @@ jobs:
             echo "docker_compose_exists=true" >> $GITHUB_OUTPUT
           else
             echo "docker_compose_exists=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Detect Project Language
-        id: detect-language
-        run: |
-          if [ -f build.sbt ]; then
-            echo "language=scala" >> $GITHUB_OUTPUT
-          elif [ -f pom.xml ] || [ -f build.gradle ]; then
-            echo "language=java" >> $GITHUB_OUTPUT
-          elif [ -f requirements.txt ] || [ -f setup.py ]; then
-            echo "language=python" >> $GITHUB_OUTPUT
-          elif [ -f package.json ]; then
-            echo "language=nodejs" >> $GITHUB_OUTPUT
-          elif [ -f go.mod ]; then
-            echo "language=go" >> $GITHUB_OUTPUT
-          else
-            echo "language=unknown" >> $GITHUB_OUTPUT
           fi
       - name: Extract metadata (tags, labels) for Docker
         if: steps.check-dockerfile.outputs.dockerfile_exists == 'true'
@@ -137,9 +119,9 @@ jobs:
           push: false
           target: lint
           tags: ${{ needs.setup.outputs.tags }}-lint
-          platforms: ${{ env.DOCKER_DEFAULT_PLATFORM }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:cache,mode=max
 
   test:
     needs: [validate-pr, setup]
@@ -171,9 +153,9 @@ jobs:
           push: false
           target: test
           tags: ${{ needs.setup.outputs.tags }}-test
-          platforms: ${{ env.DOCKER_DEFAULT_PLATFORM }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:cache,mode=max
           load: true
       - name: Export Test Artifacts
         run: |
@@ -219,9 +201,9 @@ jobs:
           target: final
           tags: ${{ needs.setup.outputs.tags }}
           labels: ${{ needs.setup.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:cache,mode=max
           provenance: true
           sbom: true
 
@@ -320,37 +302,6 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
-      - name: Snyk Test (Language-Specific Dependencies)
-        if: needs.setup.outputs.language != 'unknown'
-        run: |
-          case "${{ needs.setup.outputs.language }}" in
-            scala)
-              FILE="build.sbt"
-              ;;
-            java)
-              FILE="pom.xml"
-              ;;
-            python)
-              FILE="requirements.txt"
-              ;;
-            nodejs)
-              FILE="package.json"
-              ;;
-            go)
-              FILE="go.mod"
-              ;;
-            *)
-              FILE=""
-              ;;
-          esac
-          if [ -n "$FILE" ] && [ -f "$FILE" ]; then
-            snyk test --severity-threshold=high --sarif-file-output=snyk-lang.sarif --file="$FILE"
-          else
-            echo "No language-specific dependency file found for ${{ needs.setup.outputs.language }}"
-          fi
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: ${{ env.CONTINUE_ON_ERROR }}
       - name: Snyk Container Scan (if Docker image exists)
         if: needs.setup.outputs.dockerfile_exists == 'true'
         run: |
@@ -374,7 +325,6 @@ jobs:
       #   with:
       #     sarif_file: |
       #       snyk.sarif
-      #       snyk-lang.sarif
       #       snyk-docker.sarif
 
   release:
