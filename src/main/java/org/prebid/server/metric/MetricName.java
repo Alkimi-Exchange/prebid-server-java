@@ -31,6 +31,7 @@ public enum MetricName {
     request_time,
     prices,
     imps_requested,
+    imps_dropped,
     imps_banner,
     imps_video,
     imps_native,
@@ -63,6 +64,8 @@ public enum MetricName {
     nobid,
     gotbids,
     badinput,
+    disabled_bidder,
+    unknown_bidder,
     blocklisted_account,
     blocklisted_app,
     badserverresponse,
@@ -73,6 +76,7 @@ public enum MetricName {
     err,
     networkerr,
     buyeruid_scrubbed,
+    seat,
 
     // bids validation
     warn,
@@ -152,7 +156,10 @@ public enum MetricName {
 
     // activity
     disallowed_count("disallowed.count"),
-    processed_rules_count("processedrules.count");
+    processed_rules_count("processedrules.count"),
+
+    // profiles
+    limit_exceeded;
 
     private final String name;
 

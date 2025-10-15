@@ -7,6 +7,7 @@ import com.iab.openrtb.response.Bid;
 import io.vertx.core.Future;
 import io.vertx.core.MultiMap;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.prebid.server.auction.model.AuctionContext;
 import org.prebid.server.auction.model.BidInfo;
@@ -63,9 +64,12 @@ public class CoreCacheService {
     private static final Logger logger = LoggerFactory.getLogger(CoreCacheService.class);
 
     private static final String BID_WURL_ATTRIBUTE = "wurl";
+    private static final String TRACE_INFO_SEPARATOR = "-";
+    private static final int MAX_DATACENTER_REGION_LENGTH = 4;
 
     private final HttpClient httpClient;
-    private final URL endpointUrl;
+    private final URL externalEndpointUrl;
+    private final URL internalEndpointUrl;
     private final String cachedAssetUrlTemplate;
     private final long expectedCacheTimeMs;
     private final VastModifier vastModifier;
@@ -78,13 +82,19 @@ public class CoreCacheService {
     private final MultiMap cacheHeaders;
     private final Map<String, List<String>> debugHeaders;
 
+    private final boolean appendTraceInfoToCacheId;
+    private final String datacenterRegion;
+
     public CoreCacheService(
             HttpClient httpClient,
-            URL endpointUrl,
+            URL externalEndpointUrl,
+            URL internalEndpointUrl,
             String cachedAssetUrlTemplate,
             long expectedCacheTimeMs,
             String apiKey,
             boolean isApiKeySecured,
+            boolean appendTraceInfoToCacheId,
+            String datacenterRegion,
             VastModifier vastModifier,
             EventsService eventsService,
             Metrics metrics,
@@ -93,7 +103,8 @@ public class CoreCacheService {
             JacksonMapper mapper) {
 
         this.httpClient = Objects.requireNonNull(httpClient);
-        this.endpointUrl = Objects.requireNonNull(endpointUrl);
+        this.externalEndpointUrl = Objects.requireNonNull(externalEndpointUrl);
+        this.internalEndpointUrl = internalEndpointUrl;
         this.cachedAssetUrlTemplate = Objects.requireNonNull(cachedAssetUrlTemplate);
         this.expectedCacheTimeMs = expectedCacheTimeMs;
         this.vastModifier = Objects.requireNonNull(vastModifier);
@@ -107,16 +118,19 @@ public class CoreCacheService {
                 ? HttpUtil.headers().add(HttpUtil.X_PBC_API_KEY_HEADER, Objects.requireNonNull(apiKey))
                 : HttpUtil.headers();
         debugHeaders = HttpUtil.toDebugHeaders(cacheHeaders);
+
+        this.appendTraceInfoToCacheId = appendTraceInfoToCacheId;
+        this.datacenterRegion = normalizeDatacenterRegion(datacenterRegion);
     }
 
     public String getEndpointHost() {
-        final String host = endpointUrl.getHost();
-        final int port = endpointUrl.getPort();
+        final String host = externalEndpointUrl.getHost();
+        final int port = externalEndpointUrl.getPort();
         return port != -1 ? "%s:%d".formatted(host, port) : host;
     }
 
     public String getEndpointPath() {
-        return endpointUrl.getPath();
+        return externalEndpointUrl.getPath();
     }
 
     public String getCachedAssetURLTemplate() {
@@ -131,15 +145,17 @@ public class CoreCacheService {
                 makeDebugCacheCreative(cachedDebugLog, cacheKey, videoCacheTtl));
         final BidCacheRequest bidCacheRequest = toBidCacheRequest(cachedCreatives);
         httpClient.post(
-                endpointUrl.toString(),
+                ObjectUtils.firstNonNull(internalEndpointUrl, externalEndpointUrl).toString(),
                 cacheHeaders,
                 mapper.encodeToString(bidCacheRequest),
                 expectedCacheTimeMs);
         return cacheKey;
     }
 
-    private CachedCreative makeDebugCacheCreative(CachedDebugLog videoCacheDebugLog, String hbCacheId,
+    private CachedCreative makeDebugCacheCreative(CachedDebugLog videoCacheDebugLog,
+                                                  String hbCacheId,
                                                   Integer videoCacheTtl) {
+
         final JsonNode value = mapper.mapper().valueToTree(videoCacheDebugLog.buildCacheBody());
         videoCacheDebugLog.setCacheKey(hbCacheId);
         return CachedCreative.of(BidPutObject.builder()
@@ -166,7 +182,7 @@ public class CoreCacheService {
 
         final long startTime = clock.millis();
         return httpClient.post(
-                        endpointUrl.toString(),
+                        ObjectUtils.firstNonNull(internalEndpointUrl, externalEndpointUrl).toString(),
                         cacheHeaders,
                         mapper.encodeToString(bidCacheRequest),
                         remainingTimeout)
@@ -211,6 +227,7 @@ public class CoreCacheService {
                         .bidid(null)
                         .bidder(null)
                         .timestamp(null)
+                        .key(resolveCacheKey(accountId, putObject.getKey()))
                         .value(vastModifier.modifyVastXml(isEventsEnabled,
                                 allowedBidders,
                                 putObject,
@@ -268,7 +285,8 @@ public class CoreCacheService {
         final List<CachedCreative> cachedCreatives = Stream.concat(
                         bids.stream().map(cacheBid ->
                                 createJsonPutObjectOpenrtb(cacheBid, accountId, eventsContext)),
-                        videoBids.stream().map(videoBid -> createXmlPutObjectOpenrtb(videoBid, requestId, hbCacheId)))
+                        videoBids.stream().map(videoBid ->
+                                createXmlPutObjectOpenrtb(videoBid, requestId, hbCacheId, accountId)))
                 .collect(Collectors.toCollection(ArrayList::new));
 
         if (cachedCreatives.isEmpty()) {
@@ -293,9 +311,9 @@ public class CoreCacheService {
 
         updateCreativeMetrics(accountId, cachedCreatives);
 
-        final String url = endpointUrl.toString();
+        final String url = ObjectUtils.firstNonNull(internalEndpointUrl, externalEndpointUrl).toString();
         final String body = mapper.encodeToString(bidCacheRequest);
-        final CacheHttpRequest httpRequest = CacheHttpRequest.of(url, body);
+        final CacheHttpRequest httpRequest = CacheHttpRequest.of(externalEndpointUrl.toString(), body);
 
         final long startTime = clock.millis();
         return httpClient.post(url, cacheHeaders, body, remainingTimeout)
@@ -321,7 +339,8 @@ public class CoreCacheService {
 
         final CacheHttpResponse httpResponse = CacheHttpResponse.of(response.getStatusCode(), response.getBody());
         final int responseStatusCode = response.getStatusCode();
-        final DebugHttpCall httpCall = makeDebugHttpCall(endpointUrl.toString(), httpRequest, httpResponse, startTime);
+        final DebugHttpCall httpCall = makeDebugHttpCall(
+                externalEndpointUrl.toString(), httpRequest, httpResponse, startTime);
         final BidCacheResponse bidCacheResponse;
         try {
             bidCacheResponse = toBidCacheResponse(
@@ -344,7 +363,7 @@ public class CoreCacheService {
 
         metrics.updateCacheRequestFailedTime(accountId, clock.millis() - startTime);
 
-        final DebugHttpCall httpCall = makeDebugHttpCall(endpointUrl.toString(), request, null, startTime);
+        final DebugHttpCall httpCall = makeDebugHttpCall(externalEndpointUrl.toString(), request, null, startTime);
         return CacheServiceResult.of(httpCall, exception, Collections.emptyMap());
     }
 
@@ -385,9 +404,12 @@ public class CoreCacheService {
             bidObjectNode.put(BID_WURL_ATTRIBUTE, eventUrl);
         }
 
+        final String resolvedCacheKey = resolveCacheKey(accountId);
+
         final BidPutObject payload = BidPutObject.builder()
                 .aid(eventsContext.getAuctionId())
                 .type("json")
+                .key(resolvedCacheKey)
                 .value(bidObjectNode)
                 .ttlseconds(cacheBid.getTtl())
                 .build();
@@ -395,28 +417,30 @@ public class CoreCacheService {
         return CachedCreative.of(payload, creativeSizeFromAdm(bid.getAdm()));
     }
 
-    private CachedCreative createXmlPutObjectOpenrtb(CacheBid cacheBid, String requestId, String hbCacheId) {
+    private CachedCreative createXmlPutObjectOpenrtb(CacheBid cacheBid,
+                                                     String requestId,
+                                                     String hbCacheId,
+                                                     String accountId) {
+
         final BidInfo bidInfo = cacheBid.getBidInfo();
         final Bid bid = bidInfo.getBid();
         final String vastXml = bid.getAdm();
 
-        final String customCacheKey = resolveCustomCacheKey(hbCacheId, bidInfo.getCategory());
-
         final BidPutObject payload = BidPutObject.builder()
                 .aid(requestId)
                 .type("xml")
+                .key(resolveCacheKey(accountId, hbCacheId, bidInfo.getCategory()))
                 .value(vastXml != null ? new TextNode(vastXml) : null)
                 .ttlseconds(cacheBid.getTtl())
-                .key(customCacheKey)
                 .build();
 
         return CachedCreative.of(payload, creativeSizeFromTextNode(payload.getValue()));
     }
 
-    private static String resolveCustomCacheKey(String hbCacheId, String category) {
+    private static String formatCategoryMappedCacheKey(String hbCacheId, String category) {
         return StringUtils.isNoneEmpty(category, hbCacheId)
                 ? "%s_%s".formatted(category, hbCacheId)
-                : null;
+                : hbCacheId;
     }
 
     private String generateWinUrl(String bidId,
@@ -515,10 +539,16 @@ public class CoreCacheService {
     }
 
     private void updateCreativeMetrics(String accountId, List<CachedCreative> cachedCreatives) {
-        for (final CachedCreative cachedCreative : cachedCreatives) {
-            metrics.updateCacheCreativeSize(accountId,
-                    cachedCreative.getSize(),
-                    resolveCreativeTypeName(cachedCreative.getPayload()));
+        for (CachedCreative cachedCreative : cachedCreatives) {
+            final BidPutObject payload = cachedCreative.getPayload();
+            final MetricName creativeType = resolveCreativeTypeName(payload);
+            final Integer creativeTtl = ObjectUtils.defaultIfNull(payload.getTtlseconds(), payload.getExpiry());
+
+            if (creativeTtl != null) {
+                metrics.updateCacheCreativeTtl(accountId, creativeTtl, creativeType);
+            }
+
+            metrics.updateCacheCreativeSize(accountId, cachedCreative.getSize(), creativeType);
         }
     }
 
@@ -552,5 +582,49 @@ public class CoreCacheService {
         return BidCacheRequest.of(cachedCreatives.stream()
                 .map(CachedCreative::getPayload)
                 .toList());
+    }
+
+    private String resolveCacheKey(String accountId, String existingKey, String category) {
+        final String resolvedCacheKey = resolveCacheKey(accountId, existingKey);
+        return formatCategoryMappedCacheKey(resolvedCacheKey, category);
+
+    }
+
+    private String resolveCacheKey(String accountId) {
+        return resolveCacheKey(accountId, null);
+    }
+
+    private String resolveCacheKey(String accountId, String existingCacheKey) {
+        if (!appendTraceInfoToCacheId || existingCacheKey != null) {
+            return existingCacheKey;
+        }
+
+        final boolean isDatacenterNamePopulated = StringUtils.isNotBlank(datacenterRegion);
+        final int separatorCount = isDatacenterNamePopulated ? 2 : 1;
+        final int accountIdLength = accountId.length();
+        final int traceInfoLength = isDatacenterNamePopulated
+                ? accountIdLength + datacenterRegion.length() + separatorCount
+                : accountIdLength + separatorCount;
+
+        final String cacheKey = idGenerator.generateId();
+        if (cacheKey == null || traceInfoLength >= (cacheKey.length() / 2)) {
+            return null;
+        }
+
+        final String substring = cacheKey.substring(0, cacheKey.length() - traceInfoLength);
+        return isDatacenterNamePopulated
+                ? accountId + TRACE_INFO_SEPARATOR + datacenterRegion + TRACE_INFO_SEPARATOR + substring
+                : accountId + TRACE_INFO_SEPARATOR + substring;
+    }
+
+    private static String normalizeDatacenterRegion(String datacenterRegion) {
+        if (datacenterRegion == null) {
+            return null;
+        }
+
+        final String trimmedDatacenterRegion = datacenterRegion.trim();
+        return trimmedDatacenterRegion.length() > MAX_DATACENTER_REGION_LENGTH
+                ? trimmedDatacenterRegion.substring(0, MAX_DATACENTER_REGION_LENGTH)
+                : trimmedDatacenterRegion;
     }
 }

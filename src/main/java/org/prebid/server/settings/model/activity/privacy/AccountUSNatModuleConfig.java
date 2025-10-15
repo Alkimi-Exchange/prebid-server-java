@@ -14,6 +14,8 @@ public class AccountUSNatModuleConfig implements AccountPrivacyModuleConfig {
     @Accessors(fluent = true)
     Boolean enabled;
 
+    int skipRate;
+
     Config config;
 
     @Override
@@ -27,5 +29,9 @@ public class AccountUSNatModuleConfig implements AccountPrivacyModuleConfig {
         @JsonProperty("skip_sids")
         @JsonAlias({"skipSids", "skip-sids"})
         List<Integer> skipSids;
+
+        @JsonProperty("allow_personal_data_consent_2")
+        @JsonAlias({"allowPersonalDataConsent2", "allow-personal-data-consent-2"})
+        boolean allowPersonalDataConsent2;
     }
 }

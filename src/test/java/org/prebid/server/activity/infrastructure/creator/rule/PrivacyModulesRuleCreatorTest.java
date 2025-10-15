@@ -11,17 +11,21 @@ import org.prebid.server.activity.infrastructure.creator.privacy.PrivacyModuleCr
 import org.prebid.server.activity.infrastructure.privacy.PrivacyModuleQualifier;
 import org.prebid.server.activity.infrastructure.privacy.TestPrivacyModule;
 import org.prebid.server.activity.infrastructure.rule.Rule;
+import org.prebid.server.metric.Metrics;
 import org.prebid.server.settings.model.activity.privacy.AccountPrivacyModuleConfig;
 import org.prebid.server.settings.model.activity.privacy.AccountUSNatModuleConfig;
 import org.prebid.server.settings.model.activity.rule.AccountActivityPrivacyModulesRuleConfig;
 
 import java.util.Map;
+import java.util.Set;
 
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mock.Strictness.LENIENT;
 
 @ExtendWith(MockitoExtension.class)
 public class PrivacyModulesRuleCreatorTest {
@@ -29,13 +33,16 @@ public class PrivacyModulesRuleCreatorTest {
     @Mock
     private PrivacyModuleCreator privacyModuleCreator;
 
+    @Mock(strictness = LENIENT)
+    private Metrics metrics;
+
     private PrivacyModulesRuleCreator target;
 
     @BeforeEach
     public void setUp() {
         given(privacyModuleCreator.qualifier()).willReturn(PrivacyModuleQualifier.US_NAT);
 
-        target = new PrivacyModulesRuleCreator(singletonList(privacyModuleCreator));
+        target = new PrivacyModulesRuleCreator(singletonList(privacyModuleCreator), metrics);
     }
 
     @Test
@@ -56,7 +63,7 @@ public class PrivacyModulesRuleCreatorTest {
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList("not_configured"));
         final ActivityControllerCreationContext creationContext = creationContext(Map.of(
-                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(null, null)));
+                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(null, 0, null)));
 
         // when
         final Rule rule = target.from(config, creationContext);
@@ -70,7 +77,7 @@ public class PrivacyModulesRuleCreatorTest {
         // given
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList("*"));
-        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, null);
+        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, 0, null);
         final ActivityControllerCreationContext creationContext = creationContext(
                 Map.of(PrivacyModuleQualifier.US_NAT, moduleConfig));
 
@@ -89,7 +96,7 @@ public class PrivacyModulesRuleCreatorTest {
         // given
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList("iab.*"));
-        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, null);
+        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, 0, null);
         final ActivityControllerCreationContext creationContext = creationContext(
                 Map.of(PrivacyModuleQualifier.US_NAT, moduleConfig));
 
@@ -108,7 +115,7 @@ public class PrivacyModulesRuleCreatorTest {
         // given
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList(PrivacyModuleQualifier.US_NAT.moduleName()));
-        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, null);
+        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, 0, null);
         final ActivityControllerCreationContext creationContext = creationContext(
                 Map.of(PrivacyModuleQualifier.US_NAT, moduleConfig));
 
@@ -129,7 +136,7 @@ public class PrivacyModulesRuleCreatorTest {
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList(PrivacyModuleQualifier.US_NAT.moduleName()));
         final ActivityControllerCreationContext creationContext = creationContext(Map.of(
-                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(true, null)));
+                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(true, 0, null)));
         creationContext.use(PrivacyModuleQualifier.US_NAT);
 
         // when
@@ -145,7 +152,25 @@ public class PrivacyModulesRuleCreatorTest {
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList(PrivacyModuleQualifier.US_NAT.moduleName()));
         final ActivityControllerCreationContext creationContext = creationContext(Map.of(
-                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(false, null)));
+                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(false, 0, null)));
+
+        // when
+        final Rule rule = target.from(config, creationContext);
+
+        // then
+        assertThat(rule.proceed(null)).isEqualTo(Rule.Result.ABSTAIN);
+    }
+
+    @Test
+    public void fromShouldDisableSkippedPrivacyModule() {
+        // given
+        final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
+                singletonList(PrivacyModuleQualifier.US_NAT.moduleName()));
+        final ActivityControllerCreationContext creationContext = ActivityControllerCreationContext.of(
+                null,
+                Map.of(PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(true, 0, null)),
+                Set.of(PrivacyModuleQualifier.US_NAT),
+                null);
 
         // when
         final Rule rule = target.from(config, creationContext);
@@ -157,12 +182,12 @@ public class PrivacyModulesRuleCreatorTest {
     @Test
     public void fromShouldSkipPrivacyModuleWithoutCreator() {
         // given
-        target = new PrivacyModulesRuleCreator(emptyList());
+        target = new PrivacyModulesRuleCreator(emptyList(), metrics);
 
         final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
                 singletonList(PrivacyModuleQualifier.US_NAT.moduleName()));
         final ActivityControllerCreationContext creationContext = creationContext(Map.of(
-                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(null, null)));
+                PrivacyModuleQualifier.US_NAT, AccountUSNatModuleConfig.of(null, 0, null)));
 
         // when
         final Rule rule = target.from(config, creationContext);
@@ -171,9 +196,29 @@ public class PrivacyModulesRuleCreatorTest {
         assertThat(rule.proceed(null)).isEqualTo(Rule.Result.ABSTAIN);
     }
 
+    @Test
+    public void fromShouldSkipPrivacyModuleThatFailedCreation() {
+        // given
+        final AccountActivityPrivacyModulesRuleConfig config = AccountActivityPrivacyModulesRuleConfig.of(
+                singletonList(PrivacyModuleQualifier.US_NAT.moduleName()));
+        final AccountPrivacyModuleConfig moduleConfig = AccountUSNatModuleConfig.of(null, 0, null);
+        final ActivityControllerCreationContext creationContext = creationContext(
+                Map.of(PrivacyModuleQualifier.US_NAT, moduleConfig));
+
+        given(privacyModuleCreator.from(eq(PrivacyModuleCreationContext.of(null, moduleConfig, null))))
+                .willThrow(new IllegalArgumentException());
+
+        // when
+        final Rule rule = target.from(config, creationContext);
+
+        // then
+        assertThat(rule.proceed(null)).isEqualTo(Rule.Result.ABSTAIN);
+        assertThat(creationContext.isUsed(PrivacyModuleQualifier.US_NAT)).isFalse();
+    }
+
     private static ActivityControllerCreationContext creationContext(
             Map<PrivacyModuleQualifier, AccountPrivacyModuleConfig> modulesConfigs) {
 
-        return ActivityControllerCreationContext.of(null, modulesConfigs, null);
+        return ActivityControllerCreationContext.of(null, modulesConfigs, emptySet(), null);
     }
 }

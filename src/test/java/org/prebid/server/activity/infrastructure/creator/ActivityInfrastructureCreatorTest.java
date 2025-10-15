@@ -3,6 +3,7 @@ package org.prebid.server.activity.infrastructure.creator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.prebid.server.activity.Activity;
@@ -22,6 +23,7 @@ import org.prebid.server.settings.model.Purpose;
 import org.prebid.server.settings.model.PurposeEid;
 import org.prebid.server.settings.model.Purposes;
 import org.prebid.server.settings.model.activity.AccountActivityConfiguration;
+import org.prebid.server.settings.model.activity.privacy.AccountUSCustomLogicModuleConfig;
 import org.prebid.server.settings.model.activity.privacy.AccountUSNatModuleConfig;
 import org.prebid.server.settings.model.activity.rule.AccountActivityConditionsRuleConfig;
 
@@ -36,6 +38,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.prebid.server.activity.infrastructure.privacy.PrivacyModuleQualifier.US_NAT;
 
 @ExtendWith(MockitoExtension.class)
 public class ActivityInfrastructureCreatorTest {
@@ -91,8 +94,8 @@ public class ActivityInfrastructureCreatorTest {
                         .activities(Map.of(Activity.SYNC_USER, AccountActivityConfiguration.of(
                                 null, singletonList(AccountActivityConditionsRuleConfig.of(null, null)))))
                         .modules(asList(
-                                AccountUSNatModuleConfig.of(null, null),
-                                AccountUSNatModuleConfig.of(null, null)))
+                                AccountUSNatModuleConfig.of(null, 0, null),
+                                AccountUSNatModuleConfig.of(null, 0, null)))
                         .build())
                 .build();
 
@@ -102,6 +105,29 @@ public class ActivityInfrastructureCreatorTest {
         // then
         verify(activityRuleFactory).from(any(), argThat(arg -> arg.getPrivacyModulesConfigs().size() == 1));
         verify(metrics).updateAlertsMetrics(eq(MetricName.general));
+    }
+
+    @Test
+    public void parseShouldPopulateSkipConfigForModules() {
+        // given
+        final Account account = Account.builder()
+                .privacy(AccountPrivacyConfig.builder()
+                        .activities(Map.of(Activity.SYNC_USER, AccountActivityConfiguration.of(
+                                null, singletonList(AccountActivityConditionsRuleConfig.of(null, null)))))
+                        .modules(asList(
+                                AccountUSNatModuleConfig.of(null, 100, null),
+                                AccountUSCustomLogicModuleConfig.of(null, 0, null)))
+                        .build())
+                .build();
+
+        // when
+        creator.parse(account, null, debug);
+
+        // then
+        final ArgumentCaptor<ActivityControllerCreationContext> captor =
+                ArgumentCaptor.forClass(ActivityControllerCreationContext.class);
+        verify(activityRuleFactory).from(any(), captor.capture());
+        assertThat(captor.getValue().getSkipPrivacyModules()).containsOnly(US_NAT);
     }
 
     @Test
@@ -182,5 +208,40 @@ public class ActivityInfrastructureCreatorTest {
         assertThat(controllers.get(Activity.CALL_BIDDER).isAllowed(null)).isEqualTo(true);
         assertThat(controllers.get(Activity.TRANSMIT_UFPD).isAllowed(null)).isEqualTo(false);
         assertThat(controllers.get(Activity.TRANSMIT_EIDS).isAllowed(null)).isEqualTo(false);
+    }
+
+    @Test
+    public void parseShouldSkipRuleThatFailedCreation() {
+        // given
+        final Account account = Account.builder()
+                .privacy(AccountPrivacyConfig.builder()
+                        .activities(Map.of(
+                                Activity.SYNC_USER, AccountActivityConfiguration.of(null, null),
+                                Activity.CALL_BIDDER, AccountActivityConfiguration.of(false, null),
+                                Activity.MODIFY_UFDP, AccountActivityConfiguration.of(true, null),
+                                Activity.TRANSMIT_UFPD, AccountActivityConfiguration.of(true, singletonList(
+                                        AccountActivityConditionsRuleConfig.of(null, null)))))
+                        .build())
+                .build();
+        final GppContext gppContext = GppContextCreator.from(null, null).build().getGppContext();
+
+        given(activityRuleFactory.from(
+                same(account.getPrivacy().getActivities().get(Activity.TRANSMIT_UFPD).getRules().getFirst()),
+                argThat(arg -> arg.getGppContext() == gppContext)))
+                .willThrow(new IllegalArgumentException());
+
+        // when
+        final Map<Activity, ActivityController> controllers = creator.parse(account, gppContext, debug);
+
+        // then
+        assertThat(controllers.keySet()).containsExactlyInAnyOrder(Activity.values());
+
+        assertThat(controllers.get(Activity.SYNC_USER).isAllowed(null))
+                .isEqualTo(ActivityInfrastructure.ALLOW_ACTIVITY_BY_DEFAULT);
+        assertThat(controllers.get(Activity.CALL_BIDDER).isAllowed(null)).isEqualTo(false);
+        assertThat(controllers.get(Activity.MODIFY_UFDP).isAllowed(null)).isEqualTo(true);
+        assertThat(controllers.get(Activity.TRANSMIT_UFPD).isAllowed(null)).isEqualTo(true);
+
+        verify(metrics).updateAlertsMetrics(eq(MetricName.general));
     }
 }
