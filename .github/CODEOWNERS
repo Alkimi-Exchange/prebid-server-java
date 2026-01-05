@@ -3,10 +3,10 @@
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners for details.
 
 # Default owners for everything in the repo (applied if no specific rule matches)
-* @Alkimi-Exchange/devops-team
+*
 
 # Specific rules (override default)
-.github/workflows/ @Alkimi-Exchange/devops-team
+.github/workflows/
 
 # Example rules (commented out for future use):
 # All documentation files owned by the docs team
