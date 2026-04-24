@@ -1,0 +1,14 @@
+{
+  "id": "impId002",
+  "audio": {
+    "mimes": ["audio/mp3"]
+  },
+  "bidfloor": 0.01,
+  "bidfloorcur": "USD",
+  "ext": {
+    "alkimi": {
+      "token": "cc5bb61e-d4ab-496f-95e7-14fbfcdcc8bb"
+    }
+  },
+  "tagid": "774"
+}
