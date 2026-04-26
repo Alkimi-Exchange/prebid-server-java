@@ -43,7 +43,7 @@
         <oshi.version>6.4.5</oshi.version>
         <json-schema-validator.version>1.0.76</json-schema-validator.version>
         <jsonpatch.version>1.13</jsonpatch.version>
-        <psl.version>2.2.0</psl.version>
+        <psl.version>2.2.2</psl.version>
         <metrics-influxdb.version>1.2.2</metrics-influxdb.version>
         <vertx.prometheus.version>0.16.0</vertx.prometheus.version>
         <iabtcf.version>2.0.10</iabtcf.version>
@@ -52,7 +52,7 @@
         <protobuf.version>3.25.5</protobuf.version>
         <protoc.version>${protobuf.version}</protoc.version>
         <json-logic.version>1.0.7</json-logic.version>
-        <aws.awssdk.version>2.26.24</aws.awssdk.version>
+        <aws.awssdk.version>2.40.14</aws.awssdk.version>
 
         <!-- Project test dependency versions -->
         <wiremock.version>3.9.1</wiremock.version>
